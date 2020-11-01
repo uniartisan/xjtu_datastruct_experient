@@ -24,6 +24,7 @@ Status pop(seqstack *seq, SElemType *e);
 
 char op[] = {'+', '-', '*', '/', '^', '(', ')', '[', ']'};
 int check_in_op(char c);
+int check_in_op_s(char c);
 int input_check(int input_num, char *expression_raw, int expression_raw_lenth); //输入合法性校验
 
 int main(int argc, char *argv[])
@@ -86,13 +87,14 @@ int input_check(int input_num, char *expression_raw, int expression_raw_lenth)
             {
                 return -2;
             }
-            else if ((expression_raw[i + 1] < '0' || expression_raw[i + 1] > '9') && i != expression_raw_lenth - 1) //如果在输入的最后一个为运算符，那么由于有\n所以满足了前两个判断
+            else if ((expression_raw[i + 1] < '0' || expression_raw[i + 1] > '9') && i != expression_raw_lenth - 1)
+            //如果在输入的最后一个为运算符，那么由于有\n所以满足了前两个判断
             {
                 return -2;
             }
             else if (i == 0)
             {
-                if (expression_raw[i] == '+' || expression_raw[i] == '-' || expression_raw[i] == '*' || expression_raw[i] == '/' || expression_raw[i] == '^')
+                if (check_in_op_s(expression_raw[i]))
                 {
                     return -2;
                 }
@@ -111,6 +113,28 @@ int input_check(int input_num, char *expression_raw, int expression_raw_lenth)
                 else
                 {
                     return -3;
+                }
+            }
+
+            //小数合法性检测，检测任意两个'.'中是否存在OP
+            if (expression_raw[i] == '.')
+            {
+                int flag = 0;
+                for (int j = i; j < expression_raw_lenth; j++)
+                {
+                    if (check_in_op_s(expression_raw[j]))
+                    {
+                        flag = 1; //标记存在运算符
+                    }
+                    if (expression_raw[j] == '.')
+                    {
+                        if (flag == 1)
+                            break;
+                        else
+                        {
+                            return -2;
+                        }
+                    }
                 }
             }
         }
@@ -165,12 +189,22 @@ int check_in_op(char c)
         {
             return 1;
         }
-        else
-        {
-            return 0;
-        }
+    }
+    return 0;
+}
+
+int check_in_op_s(char c)
+{
+    if (c == '+' || c == '-' || c == '*' || c == '/' || c == '^')
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
     }
 }
+
 // Stack 实现
 Status init_stack(seqstack *seq)
 {
