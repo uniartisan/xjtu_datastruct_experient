@@ -1,480 +1,209 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+#include <ctype.h>
+#define STACK_INIT_SIZE 100
+#define STACKINCREMENT 100
 
-#define ERROR -1 //表达式不合法
-#define ERROR_02 1e9 + 2
-#define ERROR_03 -1e9
-#define STACK_MAX_LEN 1000 //字符串的长度最大值
-#define InitValue 0.0      //用于初始化变量
-#define InitValue2 1.0     //初始化变量
-#define ERROR_NoNext -1    //定义空栈错误返回值
+int g_pos; //字符数组的下标
 
-// 定义堆栈1用于存放数字
-
-typedef struct SNode1 *StackOfNumbers;
-struct SNode1
+/* 运算符栈 
+*  成员内容： 栈底、栈顶、栈容量
+*  数据类型： char
+*/
+typedef struct
 {
-    double Operand;
-    StackOfNumbers Next;
-};
+    char *base;
+    char *top;
+    int stacksize;
+} SqStack;
 
-// 定义堆栈2用于存放运算符
-
-typedef struct SNode2 *StackOfOperator;
-struct SNode2
+/* 运算数栈
+*  成员内容： 栈底、栈顶、栈容量
+*  数据类型： float
+*/
+typedef struct
 {
-    char Operator;
-    StackOfOperator Next;
-    //int StackSize;
-};
+    float *base;
+    float *top;
+    int stacksize;
+} sqStack;
 
-char op[] = {'+', '-', '*', '/', '^', '(', ')', '[', ']'}; // 运算符集合
-char pre[9][9] = {
-    {'>', '>', '<', '<', '<', '<', '>', '<', '>'},
-    {'>', '>', '<', '<', '<', '<', '>', '<', '>'},
-    {'>', '>', '>', '>', '<', '<', '>', '<', '>'},
-    {'>', '>', '>', '>', '<', '<', '>', '<', '>'},
-    {'>', '>', '>', '>', '>', '<', '>', '<', '>'},
-    {'<', '<', '<', '<', '<', '<', '=', '0', '0'},
-    {'>', '>', '>', '>', '>', '0', '>', '0', '0'},
-    {'<', '<', '<', '<', '<', '<', '0', '<', '='},
-    {'>', '>', '>', '>', '>', '0', '0', '0', '>'}};
-StackOfNumbers InitStackofNumbers(); //初始化堆栈1
-StackOfOperator InitStackofOper();   //初始化堆栈2
-
-void PushtoNumbers(StackOfNumbers S, double data); //数据data存入堆栈1
-double Pop1(StackOfNumbers S);
-
-void PushtoOper(StackOfOperator S, char oper);
-char Pop2(StackOfOperator S);
-char GetTop(StackOfOperator S);
-int GetOPLocation(char ch);
-int CheckinOp(char c);
-int CheckinOp_s(char c);
-int CheckInputErrors(int input_num, char express[]);
-int CheckBracketsErrors(char express[]);
-char Precede(char s1, char s2);
-double Caculate(double a1, double a2, char s);
-double EvaluateExpression(char Expression[]);
-int InputCheck(int input_num, char *expression_raw, int expression_raw_lenth);
-int NumStackLenth = 1;
-int OpeStackLenth = 1;
-// List Transfer(char *Expression);                //把输入的字符型表达式转化为数字和运算符的表达式
+void InitOPTRStack(SqStack &S);
+void InitOPNDStack(sqStack &S);
+char GetOPTRTop(SqStack S);
+float GetOPNDTop(sqStack S);
+void PushOPTR(SqStack &S, char e);
+void PushOPND(sqStack &S, float e);
+void PopOPTR(SqStack &S, char &e);
+void PopOPND(sqStack &S, float &e);
+int CheckInput(char e);
+float Operate(float a, char theta, float b);
+char Precede(char a, char b);
+int GetOPNum(char ch);
+char Precede(char a, char b);
+float Translation(int &pos, char s[]);
+float EvaluateExpression(char s[]);
 
 int main(int argc, char *argv[])
 {
-    float OPND[1001] = {0};
-    int OPND_TOP = 0;
-    int input_num;
-    char expression[STACK_MAX_LEN];
-    double Number[101] = {};
 
-    input_num = 2;
-    scanf("%s", expression);
-    int input_lenth; //输入字符串长度
-    input_lenth = strlen(expression);
+    int len = strlen(argv[1]);
+    argv[1][len] = '#';
+    argv[1][len + 1] = '\0';
+    printf("%g", EvaluateExpression(argv[1]));
 
-    // ERROR_01:输入参数错误
-    // ERROR_02:表达式格式错误
-    // ERROR_03:表达式逻辑错误
-    int input_check_result = CheckInputErrors(input_num, expression);
-    if (input_check_result == -1)
-    {
-        printf("ERROR_01\n");
-        return -1;
-    }
-    else if (input_check_result == -2)
-    {
-        printf("ERROR_02\n");
-        return -1;
-    }
-
-    double value = EvaluateExpression(expression); //计算表达式的值，并检查计算过程中是否合法
-    if (value == ERROR_03)                         //表达式计算过程中出现错误
-    {
-        printf("ERROR_03");
-    }
-    else
-    {
-        printf("%g", value); //输出正确的值
-    }
     return 0;
 }
 
-//初始化堆栈1，带有头结点
-StackOfNumbers InitStackofNumbers()
-{
-    StackOfNumbers S;
-    S = (StackOfNumbers)malloc(sizeof(struct SNode1));
-    S->Next = NULL;
-    return S;
-}
-
-//初始化堆栈2，带有头结点
-StackOfOperator InitStackofOper()
-{
-    StackOfOperator S;
-    S = (StackOfOperator)malloc(sizeof(struct SNode2));
-    S->Next = NULL;
-    return S;
-}
-
-/* 移除数据堆栈栈顶的元素
-*  如果空栈则返回 ERROR_NoNext
-*  程序内部已经完成内存释放
+/* 栈初始化
+*  参数：栈地址，若成功则返回栈头地址，不成功则 OVERFLOW
+*  OPTR
 */
-double Pop1(StackOfNumbers S)
+void InitOPTRStack(SqStack &S)
 {
-    if (!S->Next)
-        return ERROR_NoNext;
-    double TemData;
-    StackOfNumbers Tem;
-    NumStackLenth--;
-    Tem = S->Next;
-    TemData = Tem->Operand;
-    S->Next = Tem->Next;
-    free(Tem); //释放使用的内存
-    return TemData;
+    S.base = (char *)malloc(STACK_INIT_SIZE * sizeof(char));
+    if (!S.base)
+        exit(OVERFLOW);
+    S.top = S.base;
+    S.stacksize = STACK_INIT_SIZE;
 }
 
-/* 移除运算符堆栈栈顶的元素
-*  如果空栈则返回 NULL
-*  程序内部已经完成内存释放
+/* 栈初始化
+*  参数：栈地址，若成功则返回栈头地址，不成功则 OVERFLOW
+*  OPND
 */
-char Pop2(StackOfOperator S)
+void InitOPNDStack(sqStack &S)
 {
-    char error[] = "ERRORNoNext";
-    // if (!S->Next)
-    //     return NULL;
-    char TemOpera;
-    StackOfOperator Tem;
-    OpeStackLenth--;
-    Tem = S->Next;
-    TemOpera = Tem->Operator;
-    S->Next = Tem->Next;
-    free(Tem); //释放使用的内存
-    return TemOpera;
+    S.base = (float *)malloc(STACK_INIT_SIZE * sizeof(float));
+    if (!S.base)
+        exit(OVERFLOW);
+    S.top = S.base;
+    S.stacksize = STACK_INIT_SIZE;
 }
 
-char GetTop(StackOfOperator S)
+/* 返回栈顶元素 */
+char GetOPTRTop(SqStack S)
 {
-    if (NULL == S->Next)
-    {
-        return '\000';
-    }
-    // StackOfOperator Tem;
-    // Tem = S->Next;
-    // while (NULL!=Tem)
-    // {
-    //     Tem = S->Next;
-    // }
-
-    return (S->Next->Operator);
+    if (S.top == S.base)
+        printf("ERROR_01");
+    return *(S.top - 1);
 }
 
-/* 将双精度数据data存入数字堆栈
-*  程序内部通过malloc申请节点内存空间
+/* 返回栈顶元素 */
+float GetOPNDTop(sqStack S)
+{
+    if (S.top == S.base)
+        exit(1);
+    return *(S.top - 1);
+}
+
+/*  OPTR入栈
+*   若栈满则realloc 
 */
-void PushtoNumbers(StackOfNumbers S, double data)
+void PushOPTR(SqStack &S, char e)
 {
-    StackOfNumbers Tem;
-    NumStackLenth++;
-    Tem = (StackOfNumbers)malloc(sizeof(struct SNode1));
-    Tem->Operand = data;
-    Tem->Next = S->Next;
-    S->Next = Tem;
+    if (S.top - S.base >= S.stacksize)
+    {
+        S.base = (char *)realloc(S.base, (S.stacksize + STACKINCREMENT) * sizeof(char));
+        if (!S.base)
+            exit(OVERFLOW);
+        S.top = S.base + S.stacksize;
+        S.stacksize += STACKINCREMENT;
+    }
+    *S.top++ = e;
 }
 
-/* 将字符数据数据oper存入运算符堆栈
-*  程序内部通过malloc申请节点内存空间
+/*  OPND入栈
+*   若栈满则realloc 
 */
-void PushtoOper(StackOfOperator S, char oper)
+void PushOPND(sqStack &S, float e)
 {
-    StackOfOperator Tem;
-    OpeStackLenth++;
-    Tem = (StackOfOperator)malloc(sizeof(struct SNode2));
-    Tem->Operator = oper;
-    Tem->Next = S->Next;
-    S->Next = Tem;
+    if (S.top - S.base >= S.stacksize)
+    {
+        S.base = (float *)realloc(S.base, (S.stacksize + STACKINCREMENT) * sizeof(float));
+        if (!S.base)
+            exit(OVERFLOW);
+        S.top = S.base + S.stacksize;
+        S.stacksize += STACKINCREMENT;
+    }
+    *S.top++ = e;
 }
 
-/* 检查原始表达式错误
-*  匹配返回值：1，代表无错误
-*  错误返回值： -2，代表输入错误； -1，代表参数错误
+/*  OPTR出栈
+*   若栈空则报错（本题具体要求）
 */
-int CheckInputErrors(int input_num, char express[])
+void PopOPTR(SqStack &S, char &e)
 {
-    if (input_num != 1 + 1) //输入一个有效参数
+    if (S.top == S.base)
     {
-        return -1;
+        printf("ERROR_02");
+        exit(1);
     }
-    int expression_raw_lenth = strlen(express); //统计字符串长度
-    //表达式格式校验
-    for (int i = 0; i < expression_raw_lenth; i++)
-    {
-        //校验是否存在字符非法
-        if (express[i] >= '0' && express[i] <= '9' || express[i] == '.')
-        {
-            continue;
-        }
-        else //教研运算逻辑输入非法
-        {
-            if (!CheckinOp(express[i]) && i != expression_raw_lenth - 1)
-            {
-                return -2;
-            }
-            else if ((express[i + 1] < '0' || express[i + 1] > '9') && (!CheckinOp(express[i])))
-            //如果在输入的最后一个为运算符，那么由于有\n所以满足了前两个判断
-            {
-                return -2;
-            }
-            if (CheckinOp_s(express[0]))
-            {
-                return -2;
-            }
-        }
-    }
-    return (CheckBracketsErrors(express));
+    e = *--S.top;
 }
 
-/* 检查原始表达式中括号是否匹配
-*  匹配返回值：1，代表无错误
-*  错误返回值： -2，代表括号匹配存在问题
-*  通过模拟栈的匹配完成，减轻代码难度提升可读性
+/*  OPND出栈
+*   若栈空则报错（本题具体要求）
 */
-int CheckBracketsErrors(char express[])
+void PopOPND(sqStack &S, float &e)
 {
-    int lenth = strlen(express); //统计字符串长度
-    int temp0 = 0;
-    int temp1 = 0;
-    int t = 0, Bracket_small = 0, Bracket_big = 0;
-    for (int i = 0; i < lenth; i++) //提取所有括号
+    if (S.top == S.base)
     {
-
-        if (express[i] == '(')
-        {
-            temp0++;
-            if (Bracket_small < i)
-                Bracket_small = i;
-        }
-        if (express[i] == ')')
-        {
-            temp0--;
-        }
-        if (express[i] == '[')
-        {
-            temp1++;
-            if (Bracket_small < i)
-                Bracket_big = i;
-        }
-        if (express[i] == ']')
-        {
-            temp1--;
-        }
-        // }
+        printf("ERROR_02");
+        exit(1);
     }
-    /* 检测包括：
-    *  1. 括号匹配  2. 小括号在大括号内
-    */
-    if (Bracket_small < Bracket_big)
-    {
-        return -2;
-    }
-
-    if (temp0 || temp1)
-    {
-        return -2;
-    }
-    return 1;
+    e = *--S.top;
 }
 
-// 检查运算符，若存在返回1
-int CheckinOp(char c)
+/* 判断读入字符 */
+int CheckInput(char e)
 {
-    int lenth = strlen(op);
-    int i = 0;
-    for (i = 0; i < lenth; i++)
-    {
-        if (c == op[i])
-        {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-// 严格检查运算符： +，-，*，/，^ ,若存在返回1
-int CheckinOp_s(char c)
-{
-    if (c == '+' || c == '-' || c == '*' || c == '/' || c == '^')
-    {
-        return 1;
-    }
+    int a;
+    if (e == '+' || e == '-' || e == '*' || e == '/' || e == '(' || e == ')' || e == '^' ||
+        e == '[' || e == ']' || e == '#')
+        a = 1; //是运算符
+    else if (isdigit(e) || e == '.')
+        a = 2; //是数字或者小数点
     else
     {
-        return 0;
+        printf("ERROR_02");
+        exit(3);
     }
+    return a;
 }
 
-double EvaluateExpression(char Expression[])
+/* 运算
+*  输入参数 float a, char theta, float b
+*  返回 float result
+*/
+float Operate(float a, char theta, float b)
 {
-    double CheckError3 = 1.1;                   //初始化为非0值
-    StackOfNumbers OPND = InitStackofNumbers(); //初始化堆栈1
-    StackOfOperator OPTR = InitStackofOper();   //初始化堆栈2
+    float c;
 
-    int i = 0, j = 0;
-    int lenth = strlen(Expression);
-    char NumTemp[STACK_MAX_LEN] = {};
-    char TemOp;
-    char TemOp2;
-    double TemData = 0.1, TemData2 = 0.1; //初始化临时变量
-    int flag = 0;
-    //StackOfOperator = StackOfOperator->Next;
-    while (i <= lenth)
-    {
-        if (Expression[i] >= '0' && Expression[i] <= '9' && i < lenth)
-        {
-            //flag = 1;
-            while (Expression[i] >= '0' && Expression[i] <= '9' || Expression[i] == '.')
-            {
-                NumTemp[j++] = Expression[i++];
-            }
-            if (i <= lenth)
-                flag = -1;
-            NumTemp[j] = '\n';
-        }
-        else
-        {
-            TemOp = Expression[i]; //当前运算符
-            TemOp2 = GetTop(OPTR); //栈顶运算符
-            char Presult;
-            Presult = Precede(TemOp2, TemOp);
-            if (i <= lenth)
-            {
-                j = 0;
-                if (flag == -1 && (Expression[i] < '0' || Expression[i] > '9'))
-                {
-                    double temp0 = atof(NumTemp);
-                    NumTemp[0] = '\n';
-                    flag = 1;
-                    PushtoNumbers(OPND, temp0);
-                }
-                if (i == lenth)
-                    flag = 1;
-            }
-
-            switch (Presult)
-            {
-            case '<':
-                PushtoOper(OPTR, TemOp);
-                i++;
-                break;
-            case '=':
-                Pop2(OPTR);
-                i++;
-                break;
-            case '>':
-
-                Pop2(OPTR);
-                TemData2 = Pop1(OPND);
-                TemData = Pop1(OPND);
-                while ((GetTop(OPTR) == '(' || GetTop(OPTR) == ')' || GetTop(OPTR) == '[' || TemOp2 == ']') && OpeStackLenth > 1)
-                {
-                    Pop2(OPTR);
-                }
-                // if (CheckinOp(Expression[i + 1]))
-                // {
-                //     break;
-                // }
-                i++;
-                CheckError3 = Caculate(TemData, TemData2, TemOp2);
-                if (TemOp != '\000')
-                    PushtoOper(OPTR, TemOp); //当前运算符入栈
-                if (CheckError3 == ERROR_03)
-                    return ERROR_03; //存在错误情况ERROR_03
-                else
-                {
-                    PushtoNumbers(OPND, CheckError3);
-                }
-
-                // default:
-                //     i++;
-                //     break;
-            }
-        }
-    }
-    while (NumStackLenth > 2)
-    {
-        /* code */
-        TemData2 = Pop1(OPND);
-        TemData = Pop1(OPND);
-        TemOp2 = Pop2(OPTR);
-        while (TemOp2 == '(' || TemOp2 == ')' || TemOp2 == '[' || TemOp2 == ']')
-        {
-            TemOp2 = Pop2(OPTR);
-        }
-        CheckError3 = Caculate(TemData, TemData2, TemOp2);
-
-        //PushtoOper(OPTR, TemOp);
-        if (CheckError3 == ERROR_03)
-            return ERROR_03; //存在错误情况ERROR_03
-        else
-        {
-            PushtoNumbers(OPND, CheckError3);
-            //i++;
-        }
-    }
-
-    return Pop1(OPND);
+    if (theta == '+')
+        c = a + b;
+    else if (theta == '-')
+        c = a - b;
+    else if (theta == '*')
+        c = a * b;
+    else if (theta == '/')
+        c = a / b;
+    else if (theta == '^')
+        c = pow(a, b);
+    else
+        printf("ERROR_02"); // exit(1);
+    return c;
 }
 
-char Precede(char s1, char s2)
+/* 获取运算符编号 1~9
+*  若输入错误返回 -1
+*/
+int GetOPNum(char ch)
 {
-    if (s1 == '\000')
-    {
-        return '<';
-    }
-    if (s2 == '\000')
-    {
-        return '>';
-    }
-    int t1 = GetOPLocation(s1);
-    int t2 = GetOPLocation(s2);
-    return pre[t1][t2];
-}
-
-double Caculate(double a1, double a2, char s)
-{
-    if (s == '+')
-        return a1 + a2;
-    if (s == '-')
-        return a1 - a2;
-    if (s == '*')
-        return a1 * a2;
-    if (s == '/')
-    {
-        double temp = 0.00001;
-        if (a2 != 0)
-            return a1 / a2;
-        else
-            return -1e9;
-    }
-    if (s == '^')
-    {
-        double temp2 = 1;
-        for (int i = 1; i <= a2; i++)
-        {
-            temp2 *= a1;
-        }
-        return temp2;
-    }
-}
-
-// 找到运算符的位置，未找到返回-1
-int GetOPLocation(char ch)
-{
-    for (int i = 0; i < 9; i++)
+    char op[] = {'+', '-', '*', '/', '(', ')', '[', ']', '^', '#'};
+    for (int i = 0; i < 10; i++)
     {
         if (op[i] == ch)
         {
@@ -482,4 +211,113 @@ int GetOPLocation(char ch)
         }
     }
     return -1;
+}
+
+/* 比较运算符的优先级 */
+char Precede(char a, char b)
+{
+    int i, j;
+    char f;
+    char Table[10][10] = {
+        /*    +     -     *     /     (     )     [     ]     ^     #      */
+        /* + */ {'>', '>', '<', '<', '<', '>', '<', '>', '<', '>'},
+        /* - */ {'>', '>', '<', '<', '<', '>', '<', '>', '<', '>'},
+        /* * */ {'>', '>', '>', '>', '<', '>', '<', '>', '<', '>'},
+        /* / */ {'>', '>', '>', '>', '<', '>', '<', '>', '<', '>'},
+        /* ( */ {'<', '<', '<', '<', '<', '=', '?', '?', '<', '?'},
+        /* ) */ {'>', '>', '>', '>', '?', '>', '?', '?', '>', '>'},
+        /* [ */ {'<', '<', '<', '<', '<', '?', '<', '=', '<', '?'},
+        /* ] */ {'>', '>', '>', '>', '?', '?', '?', '>', '>', '>'},
+        /* ^ */ {'>', '>', '>', '>', '<', '>', '<', '>', '>', '>'},
+        /* # */ {'<', '<', '<', '<', '<', '?', '<', '?', '<', '='},
+    };
+    f = Table[GetOPNum(a)][GetOPNum(b)];
+    if (f == '?')
+    {
+        printf("ERROR_02");
+        exit(1);
+    }
+    else
+        return f;
+}
+
+/* char-float转换，取完整数字 */
+float Translation(int &pos, char s[])
+{
+    float integer = 0.0;   // 整数部分
+    float remainder = 0.0; // 小数部分
+
+    while (s[pos] >= '0' && s[pos] <= '9')
+    {
+        integer *= 10;
+        integer += (s[pos] - '0');
+        pos++;
+    }
+
+    if (s[pos] == '.')
+    {
+        pos++;
+        int c = 1;
+        while (s[pos] >= '0' && s[pos] <= '9')
+        {
+            float t = s[pos] - '0';
+            t *= pow(0.1, c);
+            c++;
+            remainder += t;
+            pos++;
+        }
+    }
+
+    return integer + remainder;
+}
+
+/* 通过栈进行计算 */
+float EvaluateExpression(char s[])
+{
+    SqStack(OPTR);
+    sqStack(OPND);
+    InitOPNDStack(OPND);
+    InitOPTRStack(OPTR);
+
+    char c, x, theta;
+    float a, b;
+    int len = strlen(s);
+
+    PushOPTR(OPTR, '#');
+    for (g_pos = 0; g_pos < len;)
+    {
+        c = s[g_pos];
+        if (CheckInput(c) == 2)
+        {
+            PushOPND(OPND, Translation(g_pos, s));
+        }
+        else if (CheckInput(c) == 1)
+        {
+            switch (Precede(GetOPTRTop(OPTR), s[g_pos]))
+            {
+            case '<':
+                PushOPTR(OPTR, c);
+                g_pos++;
+                break;
+            case '>':
+                PopOPTR(OPTR, theta);
+                PopOPND(OPND, b);
+                PopOPND(OPND, a);
+                if (theta == '/' && b == 0.0)
+                {
+                    printf("ERROR_03");
+                    exit(1);
+                }
+                else
+                    PushOPND(OPND, Operate(a, theta, b));
+                break;
+            case '=':
+                PopOPTR(OPTR, x);
+
+                g_pos++;
+                break;
+            }
+        }
+    }
+    return GetOPNDTop(OPND);
 }
